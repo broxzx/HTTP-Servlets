@@ -1,0 +1,9 @@
+<component name="ArtifactManager">
+  <artifact type="war" name="servlets-starter">
+    <output-path>$PROJECT_DIR$/out/artifacts/servlets_starter</output-path>
+    <root id="archive" name="servlets-starter.war">
+      <element id="artifact" artifact-name="unnamed" />
+      <element id="module-source" name="HTTP_Servlets" />
+    </root>
+  </artifact>
+</component>

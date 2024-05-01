@@ -7,50 +7,62 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class HttpServer {
 
+    private final ExecutorService pool;
+
     private final int port;
 
-    public HttpServer(int port) {
+    private boolean stopped;
+
+    public HttpServer(int port, int poolSize) {
         this.port = port;
+        this.pool = Executors.newFixedThreadPool(poolSize);
+        this.stopped = false;
     }
 
 
     public void run() {
-        try {
-            Socket accept;
+        while (!stopped) {
             try (ServerSocket server = new ServerSocket(port)) {
-                accept = server.accept();
+                Socket socket = server.accept();
+                pool.submit(() -> processSocket(socket));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-
-            processSocket(accept);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
-
-
     }
 
-    private void processSocket(Socket accept) {
-        try (accept;
-             DataInputStream dataInputStream = new DataInputStream(accept.getInputStream());
-             DataOutputStream dataOutputStream = new DataOutputStream(accept.getOutputStream())) {
-            System.out.printf("Request: %s%n", new String(dataInputStream.readNBytes(400)));
+    private void processSocket(Socket socket) {
+        try (socket;
+             DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
+             DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream())) {
 
-            byte[] bytes = Files.readAllBytes(Path.of( "src", "main", "resources", "example.html"));
+            StringBuilder requestBuilder = new StringBuilder();
+            do {
+                int c = dataInputStream.read();
+                requestBuilder.append((char) c);
+            } while (requestBuilder.indexOf("\r\n\r\n") == -1);
+            System.out.printf("Request: %s%n", requestBuilder.toString());
+
+            byte[] bytes = Files.readAllBytes(Path.of("src", "main", "resources", "example.html"));
 
             String headers = """
-                    HTTP 1.1 200 OK
-                    content-type: text/html
+                    HTTP/1.1 200 OK
+                    content-type: application/json
                     content-length: %s
                     """.formatted(bytes.length);
 
-            dataOutputStream.write(headers.getBytes());
-            dataOutputStream.write(System.lineSeparator().getBytes());
+            // Ensure proper newline for headers
+            dataOutputStream.write((headers + "\r\n\r\n").getBytes());
             dataOutputStream.write(bytes);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+
+        this.stopped = true;
     }
 }
